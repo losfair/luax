@@ -188,7 +188,7 @@ impl UnrestrictedGenerateCode for Stmt {
                 if let Some(ref else_blk) = *else_branch {
                     fb.move_forward();
                     let else_begin = fb.current_basic_block;
-                    else_blk.unrestricted_generate_code(fb)?;
+                    fb.scoped(|fb| else_blk.unrestricted_generate_code(fb))?;
                     fb.get_current_bb().opcodes.push(OpCode::Branch(terminator_bb_id));
                     branch_begin_bbs.push(else_begin);
                 } else {
@@ -207,7 +207,7 @@ impl UnrestrictedGenerateCode for Stmt {
                         current_bb,
                         branch_begin_bbs[i + 1]
                     ));
-                    blk.unrestricted_generate_code(fb)?;
+                    fb.scoped(|fb| blk.unrestricted_generate_code(fb))?;
                     fb.get_current_bb().opcodes.push(OpCode::Branch(terminator_bb_id));
                 }
 
