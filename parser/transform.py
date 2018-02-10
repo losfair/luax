@@ -27,15 +27,20 @@ class Node:
         result = Node()
 
         if type(inNode) == dict:
-            result.tag = inNode["tag"]
+            try:
+                result.tag = inNode["tag"]
+            except KeyError:
+                return None
             for k in inNode:
                 if reprsInt(k):
-                    result.children.append(Node.fromInput(inNode[k]))
+                    v = Node.fromInput(inNode[k])
+                    if v != None:
+                        result.children.append(v)
         elif type(inNode) == list:
-            result.children = list(map(
-                lambda x: Node.fromInput(x),
-                inNode
-            ))
+            for child in inNode:
+                v = Node.fromInput(child)
+                if v != None:
+                    result.children.append(v)
         else:
             result = Node.fromValue(inNode)
                     
@@ -109,6 +114,30 @@ class Node:
                 pass
             else:
                 assert(False)
+        elif self.tag == "Function":
+            if len(self.children) == 1:
+                return {
+                    "Function": [
+                        [],
+                        self.children[0].toDict()
+                    ]
+                }
+        elif self.tag == "If":
+            branchList = []
+            for i in range(0, int(len(self.children) / 2)):
+                branchList.append([
+                    self.children[i * 2].toDict(),
+                    self.children[i * 2 + 1].toDict()
+                ])
+            elseBranch = None
+            if len(self.children) % 2 == 1:
+                elseBranch = self.children[len(self.children) - 1].toDict()
+            return {
+                "If": [
+                    branchList,
+                    elseBranch
+                ]
+            }
 
         v = list(map(lambda x: x.toDict(), self.children))
 
@@ -126,6 +155,8 @@ class Node:
             "sub": "Sub",
             "mul": "Mul",
             "div": "Div",
+            "mod": "Mod",
+            "pow": "Pow",
             "eq": "Eq",
             "ne": "Ne",
             "lt": "Lt",
