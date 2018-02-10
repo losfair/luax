@@ -6,15 +6,20 @@ use hexagon_vm_core::builtin::dynamic_object::DynamicObject;
 use hexagon_vm_core::function::Function;
 use hexagon_vm_core::errors::VMError;
 use codegen::ModuleBuilder;
+use lua_types::Table;
 
 pub struct ModuleRuntime<'a> {
     executor: &'a mut ExecutorImpl
 }
 
-macro_rules! native {
-    ($e:expr, $f:expr) => (Value::Object($e.get_object_pool_mut().allocate(
-        Box::new(Function::from_native(Box::new($f)))
+macro_rules! alloc_object {
+    ($e:expr, $v:expr) => (Value::Object($e.get_object_pool_mut().allocate(
+        Box::new($v)
     )))
+}
+
+macro_rules! native {
+    ($e:expr, $f:expr) => (alloc_object!($e, Function::from_native(Box::new($f))))
 }
 
 macro_rules! set_fields {
@@ -51,6 +56,9 @@ fn init_global_resources(e: &mut ExecutorImpl, g: &mut DynamicObject) {
                 });
             }
             Value::Null
+        }),
+        "@__luax_internal.new_table" => native!(e, |e| {
+            alloc_object!(e, Table::new())
         }),
         "panic" => Value::Null
     );

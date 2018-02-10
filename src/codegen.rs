@@ -221,11 +221,10 @@ impl<'a> FunctionBuilder<'a> {
     pub fn write_table_create(&mut self) -> Result<(), CodegenError> {
         self.get_current_bb().opcodes.extend(vec! [
             OpCode::LoadNull,
-            OpCode::LoadString("new_dynamic".into()),
-            OpCode::LoadNull,
-            OpCode::LoadString("__builtin".into()),
-            OpCode::GetStatic,
-            OpCode::CallField(1)
+            OpCode::LoadString("@__luax_internal.new_table".into()),
+            OpCode::LoadThis,
+            OpCode::GetField,
+            OpCode::Call(0)
         ]);
         Ok(())
     }
@@ -235,7 +234,8 @@ impl<'a> FunctionBuilder<'a> {
             OpCode::LoadString("__set__".into()),
             OpCode::LoadNull,
             OpCode::Rotate3,
-            OpCode::CallField(2)
+            OpCode::CallField(2),
+            OpCode::Pop
         ]);
         Ok(())
     }
@@ -266,7 +266,8 @@ impl<'a> FunctionBuilder<'a> {
             OpCode::LoadString("__set__".into()),
             OpCode::LoadNull,
             OpCode::Rotate3,
-            OpCode::CallField(2)
+            OpCode::CallField(2),
+            OpCode::Pop
         ]);
         Ok(())
     }

@@ -276,10 +276,11 @@ impl RestrictedGenerateCode for Expr {
             },
             Expr::Table(ref elems) => {
                 fb.write_table_create()?;
-                for v in elems {
+                for (i, v) in elems.iter().enumerate() {
                     fb.get_current_bb().opcodes.push(OpCode::Dup);
                     v.restricted_generate_code(fb)?;
-                    fb.get_current_bb().opcodes.push(OpCode::Rotate2);
+                    fb.get_current_bb().opcodes.push(OpCode::LoadFloat(i as f64));
+                    fb.get_current_bb().opcodes.push(OpCode::Rotate3);
                     fb.write_table_set()?;
                 }
             },
