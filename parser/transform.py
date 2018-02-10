@@ -140,6 +140,9 @@ class Node:
             }
         elif self.tag == "Break":
             return "Break"
+        elif self.tag == "Paren": # Is this correct?
+            assert(len(self.children) == 1)
+            return self.children[0].toDict()
 
         v = list(map(lambda x: x.toDict(), self.children))
 
