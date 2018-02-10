@@ -164,6 +164,7 @@ class Node:
             "le": "Le",
             "ge": "Ge",
             "not": "Not",
+            "unm": "Unm",
             "concat": "Concat"
         }
         if name in opTable:
