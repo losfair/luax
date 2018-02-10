@@ -51,6 +51,10 @@ impl BasicBlockBuilder {
             opcodes: Vec::new()
         }
     }
+
+    pub fn detach_opcodes(&mut self, start: usize) -> Vec<OpCode> {
+        self.opcodes.split_off(start)
+    }
 }
 
 impl ModuleBuilder {

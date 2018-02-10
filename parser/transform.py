@@ -170,7 +170,9 @@ class Node:
             "ge": "Ge",
             "not": "Not",
             "unm": "Unm",
-            "concat": "Concat"
+            "concat": "Concat",
+            "and": "And",
+            "or": "Or"
         }
         if name in opTable:
             return opTable[name]

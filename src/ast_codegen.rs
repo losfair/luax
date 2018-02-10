@@ -1,6 +1,6 @@
 use std::error::Error;
 use std::fmt;
-use hexagon_vm_core::opcode::OpCode;
+use hexagon_vm_core::opcode::{OpCode, SelectType};
 use ast::{Block, Expr, Stmt, Lhs, GetEscapeInfo};
 use codegen::{ModuleBuilder, FunctionBuilder, BasicBlockBuilder, LoopControlInfo, VarLocation};
 
@@ -375,6 +375,38 @@ impl RestrictedGenerateCode for Expr {
                 v.restricted_generate_code(fb)?;
                 fb.get_current_bb().opcodes.push(OpCode::LoadFloat(0.0));
                 fb.get_current_bb().opcodes.push(OpCode::Sub);
+            },
+            Expr::And(ref left, ref right) => {
+                let begin = fb.get_current_bb().opcodes.len();
+                left.restricted_generate_code(fb)?;
+                let left_opcodes = fb.get_current_bb().detach_opcodes(begin);
+                assert!(begin == fb.get_current_bb().opcodes.len());
+
+                right.restricted_generate_code(fb)?;
+                let right_opcodes = fb.get_current_bb().detach_opcodes(begin);
+                assert!(begin == fb.get_current_bb().opcodes.len());
+
+                fb.get_current_bb().opcodes.push(OpCode::Select(
+                    SelectType::And,
+                    left_opcodes,
+                    right_opcodes
+                ));
+            },
+            Expr::Or(ref left, ref right) => {
+                let begin = fb.get_current_bb().opcodes.len();
+                left.restricted_generate_code(fb)?;
+                let left_opcodes = fb.get_current_bb().detach_opcodes(begin);
+                assert!(begin == fb.get_current_bb().opcodes.len());
+
+                right.restricted_generate_code(fb)?;
+                let right_opcodes = fb.get_current_bb().detach_opcodes(begin);
+                assert!(begin == fb.get_current_bb().opcodes.len());
+
+                fb.get_current_bb().opcodes.push(OpCode::Select(
+                    SelectType::Or,
+                    left_opcodes,
+                    right_opcodes
+                ));
             },
             Expr::Call(ref target, ref args) => {
                 for arg in args {
