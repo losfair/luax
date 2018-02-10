@@ -10,6 +10,38 @@ pub struct ModuleRuntime<'a> {
     executor: &'a mut ExecutorImpl
 }
 
+macro_rules! native {
+    ($e:expr, $f:expr) => (Value::Object($e.get_object_pool_mut().allocate(
+        Box::new(Function::from_native(Box::new($f)))
+    )))
+}
+
+macro_rules! set_fields {
+    ( $g:ident, $($k:expr => $v:expr),* ) => {
+        {
+            $(
+                $g.set_field(
+                    $k,
+                    $v
+                );
+            )*
+        }
+    }
+}
+
+fn init_global_resources(e: &mut ExecutorImpl, g: &mut DynamicObject) {
+    set_fields!(
+        g,
+        "print" => native!(e, |e| {
+            let v = e.get_current_frame().must_get_argument(0);
+            let s = ValueContext::new(&v, e.get_object_pool()).to_str().to_string();
+            println!("{}", s);
+            Value::Null
+        }),
+        "panic" => Value::Null
+    );
+}
+
 pub fn invoke(executor: &mut ExecutorImpl, builder: ModuleBuilder, entry_fn_id: usize) {
     let functions = builder.functions.into_inner();
     let mut global_resources = DynamicObject::new(None);
@@ -33,6 +65,8 @@ pub fn invoke(executor: &mut ExecutorImpl, builder: ModuleBuilder, entry_fn_id: 
         Value::Object(executor.get_object_pool_mut().allocate(Box::new(fn_res)))
     );
 
+    init_global_resources(executor, &mut global_resources);
+
     //global_resources.freeze();
 
     let global_resources_inst = Value::Object(executor.get_object_pool_mut().allocate(
@@ -44,6 +78,9 @@ pub fn invoke(executor: &mut ExecutorImpl, builder: ModuleBuilder, entry_fn_id: 
             let f = executor.get_object_pool().must_get_typed::<Function>(id);
             f.bind_this(global_resources_inst);
             f.static_optimize(executor.get_object_pool_mut());
+            if let Some(info) = f.to_virtual_info() {
+                println!("{:?}", info);
+            }
         } else {
             unreachable!()
         }

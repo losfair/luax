@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::fmt;
 use hexagon_vm_core::opcode::OpCode;
-use ast::{Block, Expr, Stmt, Lhs, GetUsedVars};
+use ast::{Block, Expr, Stmt, Lhs, GetEscapeInfo};
 use codegen::{ModuleBuilder, FunctionBuilder, BasicBlockBuilder, LoopControlInfo, VarLocation};
 
 #[derive(Debug)]
@@ -290,7 +290,9 @@ impl RestrictedGenerateCode for Expr {
                 for arg in args {
                     arg.restricted_generate_code(fb)?;
                 }
-                fb.get_current_bb().opcodes.push(OpCode::RotateReverse(args.len()));
+                if args.len() > 0 {
+                    fb.get_current_bb().opcodes.push(OpCode::RotateReverse(args.len()));
+                }
                 fb.get_current_bb().opcodes.push(OpCode::LoadNull);
                 target.restricted_generate_code(fb)?;
                 fb.get_current_bb().opcodes.push(OpCode::Call(args.len()));

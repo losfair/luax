@@ -4,7 +4,9 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_json;
-extern crate hexagon_vm_core;
+pub extern crate hexagon_vm_core;
+
+pub use hexagon_vm_core as vm;
 
 pub mod ast_codegen;
 pub mod ast;

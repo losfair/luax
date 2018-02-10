@@ -1,16 +1,18 @@
 use std::rc::Rc;
-use std::cell::RefCell;
-use std::collections::HashMap;
+use std::cell::{Cell, RefCell};
+use std::collections::{HashMap, HashSet};
 use std::panic::{catch_unwind, resume_unwind, AssertUnwindSafe};
 use hexagon_vm_core::basic_block::BasicBlock;
 use hexagon_vm_core::opcode::OpCode;
 use hexagon_vm_core::function::Function;
 use ast;
+use ast::GetEscapeInfo;
 use ast_codegen::{RestrictedGenerateCode, UnrestrictedGenerateCode, CodegenError};
 
 pub struct ModuleBuilder {
     scopes: RefCell<Vec<Scope>>,
-    pub(crate) functions: RefCell<Vec<Function>>
+    pub(crate) functions: RefCell<Vec<Function>>,
+    next_unique_id: Cell<usize>
 }
 
 pub struct Scope {
@@ -18,7 +20,7 @@ pub struct Scope {
     is_function_root: bool
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum VarLocation {
     Local(usize),
     This(String)
@@ -35,7 +37,8 @@ pub struct FunctionBuilder<'a> {
     pub(crate) basic_blocks: Vec<BasicBlockBuilder>,
     next_local_id: usize,
     pub(crate) current_basic_block: usize,
-    loop_control_info: Vec<LoopControlInfo>
+    loop_control_info: Vec<LoopControlInfo>,
+    closure_escaped_vars: HashSet<String>
 }
 
 pub struct BasicBlockBuilder {
@@ -54,7 +57,8 @@ impl ModuleBuilder {
     pub fn new() -> ModuleBuilder {
         ModuleBuilder {
             scopes: RefCell::new(Vec::new()),
-            functions: RefCell::new(Vec::new())
+            functions: RefCell::new(Vec::new()),
+            next_unique_id: Cell::new(0)
         }
     }
 
@@ -99,6 +103,13 @@ impl ModuleBuilder {
 
         None
     }
+
+    pub fn get_unique_id(&self) -> String {
+        let id = self.next_unique_id.get();
+        self.next_unique_id.set(id + 1);
+
+        format!("@__luax_internal.unique.{}", id)
+    }
 }
 
 impl Scope {
@@ -129,7 +140,8 @@ impl<'a> FunctionBuilder<'a> {
             ],
             next_local_id: 0,
             current_basic_block: 1,
-            loop_control_info: Vec::new()
+            loop_control_info: Vec::new(),
+            closure_escaped_vars: HashSet::new()
         }
     }
 
@@ -148,7 +160,7 @@ impl<'a> FunctionBuilder<'a> {
 
     pub fn build_args_load(&mut self, names: Vec<String>) -> Result<(), CodegenError> {
         for i in 0..names.len() {
-            let loc = self.get_var_location(names[i].as_str());
+            let loc = self.create_local(names[i].as_str());
             self.get_current_bb().opcodes.push(
                 OpCode::GetArgument(i)
             );
@@ -158,20 +170,28 @@ impl<'a> FunctionBuilder<'a> {
     }
 
     pub fn create_local(&mut self, key: &str) -> VarLocation {
-        let loc = VarLocation::Local(self.next_local_id);
-        self.next_local_id += 1;
+        let loc = if self.closure_escaped_vars.contains(key) {
+            VarLocation::This(self.module.get_unique_id())
+        } else {
+            let v = VarLocation::Local(self.next_local_id);
+            self.next_local_id += 1;
+            v
+        };
         self.module.add_var_to_scope(
             key.to_string(),
             loc.clone()
         );
+        println!("[create_local] {} -> {:?}", key, loc);
         loc
     }
 
     pub fn get_var_location(&mut self, key: &str) -> VarLocation {
-        match self.module.lookup_var(key) {
+        let loc = match self.module.lookup_var(key) {
             Some(v) => v,
-            None => self.create_local(key)
-        }
+            None => VarLocation::This(key.to_string())
+        };
+        println!("[get_var_location] {} -> {:?}", key, loc);
+        loc
     }
 
     pub fn get_anonymous_local(&mut self) -> VarLocation {
@@ -298,6 +318,10 @@ impl<'a> FunctionBuilder<'a> {
     }
 
     pub fn build(mut self, blk: &ast::Block) -> Result<usize, CodegenError> {
+        self.closure_escaped_vars = blk.get_closure_escaped_vars().into_iter().collect();
+        println!("Locals escaped to closures: {:?}", self.closure_escaped_vars);
+
+        println!("{:?}", blk);
         blk.unrestricted_generate_code(&mut self)?;
         self.get_current_bb().opcodes.push(OpCode::LoadNull);
         self.get_current_bb().opcodes.push(OpCode::Return);
@@ -311,6 +335,8 @@ impl<'a> FunctionBuilder<'a> {
             .map(|bb| BasicBlock::from_opcodes(bb.opcodes.clone()))
             .collect();
         let f = Function::from_basic_blocks(target_bbs);
+        println!("{:?}", f.to_virtual_info().unwrap());
+
         let mut functions = self.module.functions.borrow_mut();
         functions.push(f);
         Ok(functions.len() - 1)

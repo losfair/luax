@@ -1,3 +1,6 @@
+use std::collections::HashSet;
+use serde_json;
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Stmt {
     Do(Vec<Stmt>),
@@ -57,19 +60,6 @@ pub enum Lhs {
     Index(Expr, Expr)
 }
 
-impl Lhs {
-    pub fn id(&self) -> Option<&str> {
-        match *self {
-            Lhs::Id(ref s) => Some(s.as_str()),
-            _ => None
-        }
-    }
-}
-
-pub trait GetUsedVars {
-    fn get_used_vars(&self) -> Vec<String>;
-}
-
 macro_rules! concat_vec {
     ($left:expr, $right:expr) => ({
         let mut ret = $left;
@@ -84,6 +74,32 @@ macro_rules! pair_get_used_vars {
     })
 }
 
+macro_rules! pair_get_closure_escaped_vars {
+    ($left:expr, $right:expr) => ({
+        concat_vec!($left.get_closure_escaped_vars(), $right.get_closure_escaped_vars())
+    })
+}
+
+impl Block {
+    pub fn from_json<T: AsRef<str>>(json: T) -> Result<Block, serde_json::Error> {
+        serde_json::from_str(json.as_ref())
+    }
+}
+
+impl Lhs {
+    pub fn id(&self) -> Option<&str> {
+        match *self {
+            Lhs::Id(ref s) => Some(s.as_str()),
+            _ => None
+        }
+    }
+}
+
+pub trait GetEscapeInfo {
+    fn get_used_vars(&self) -> Vec<String>;
+    fn get_closure_escaped_vars(&self) -> Vec<String>;
+}
+
 impl Block {
     pub fn statements(&self) -> &Vec<Stmt> {
         match *self {
@@ -92,13 +108,36 @@ impl Block {
     }
 }
 
-impl GetUsedVars for Block {
+impl GetEscapeInfo for Block {
     fn get_used_vars(&self) -> Vec<String> {
-        self.statements().get_used_vars()
+        let mut locals: HashSet<String> = HashSet::new();
+        let mut result: Vec<String> = Vec::new();
+
+        for stmt in self.statements() {
+            let new_results: Vec<String> = stmt.get_used_vars().into_iter()
+                .filter(|x| !locals.contains(x))
+                .collect();
+            result.extend(
+                new_results
+            );
+            if let Stmt::Local(ref lhs, _) = *stmt {
+                for v in lhs {
+                    if let Some(k) = v.id() {
+                        locals.insert(k.to_string());
+                    }
+                }
+            }
+        }
+
+        result
+    }
+
+    fn get_closure_escaped_vars(&self) -> Vec<String> {
+        self.statements().get_closure_escaped_vars()
     }
 }
 
-impl GetUsedVars for Lhs {
+impl GetEscapeInfo for Lhs {
     fn get_used_vars(&self) -> Vec<String> {
         match *self {
             Lhs::Id(ref v) => vec! [ v.clone() ],
@@ -109,9 +148,13 @@ impl GetUsedVars for Lhs {
             }
         }
     }
+
+    fn get_closure_escaped_vars(&self) -> Vec<String> {
+        Vec::new()
+    }
 }
 
-impl GetUsedVars for Vec<Lhs> {
+impl GetEscapeInfo for Vec<Lhs> {
     fn get_used_vars(&self) -> Vec<String> {
         let mut ret: Vec<String> = Vec::new();
         for v in self.iter() {
@@ -119,9 +162,13 @@ impl GetUsedVars for Vec<Lhs> {
         }
         ret
     }
+
+    fn get_closure_escaped_vars(&self) -> Vec<String> {
+        Vec::new()
+    }
 }
 
-impl GetUsedVars for Stmt {
+impl GetEscapeInfo for Stmt {
     fn get_used_vars(&self) -> Vec<String> {
         match *self {
             Stmt::Do(ref v) => v.get_used_vars(),
@@ -144,16 +191,46 @@ impl GetUsedVars for Stmt {
                     c.get_used_vars()
                 )
             },
-            Stmt::Local(ref l, ref r) => pair_get_used_vars!(l, r),
+            Stmt::Local(ref l, ref r) => r.get_used_vars(),
             Stmt::Localrec(ref l, ref r) => pair_get_used_vars!(l, r),
             Stmt::Goto(_) | Stmt::Label(_) | Stmt::Break => Vec::new(),
             Stmt::Return(ref v) => v.get_used_vars(),
             Stmt::Call(ref l, ref r) => pair_get_used_vars!(l, r)
         }
     }
+
+    fn get_closure_escaped_vars(&self) -> Vec<String> {
+        match *self {
+            Stmt::Do(ref v) => v.get_closure_escaped_vars(),
+            Stmt::Set(ref l, ref r) => pair_get_closure_escaped_vars!(l, r),
+            Stmt::While(ref l, ref r) => pair_get_closure_escaped_vars!(l, r),
+            Stmt::Repeat(ref l, ref r) => pair_get_closure_escaped_vars!(l, r),
+            Stmt::If(ref l, ref r) => pair_get_closure_escaped_vars!(l, r),
+            Stmt::Fornum(ref a, ref b, ref c, ref d, ref e) => {
+                concat_vec!(
+                    pair_get_closure_escaped_vars!(a, b),
+                    concat_vec!(
+                        pair_get_closure_escaped_vars!(c, d),
+                        e.get_closure_escaped_vars()
+                    )
+                )
+            },
+            Stmt::Forin(ref a, ref b, ref c) => {
+                concat_vec!(
+                    pair_get_closure_escaped_vars!(a, b),
+                    c.get_closure_escaped_vars()
+                )
+            },
+            Stmt::Local(ref l, ref r) => pair_get_closure_escaped_vars!(l, r),
+            Stmt::Localrec(ref l, ref r) => pair_get_closure_escaped_vars!(l, r),
+            Stmt::Goto(_) | Stmt::Label(_) | Stmt::Break => Vec::new(),
+            Stmt::Return(ref v) => v.get_closure_escaped_vars(),
+            Stmt::Call(ref l, ref r) => pair_get_closure_escaped_vars!(l, r)
+        }
+    }
 }
 
-impl GetUsedVars for Vec<Stmt> {
+impl GetEscapeInfo for Vec<Stmt> {
     fn get_used_vars(&self) -> Vec<String> {
         let mut ret: Vec<String> = Vec::new();
         for v in self.iter() {
@@ -161,9 +238,17 @@ impl GetUsedVars for Vec<Stmt> {
         }
         ret
     }
+
+    fn get_closure_escaped_vars(&self) -> Vec<String> {
+        let mut ret: Vec<String> = Vec::new();
+        for v in self.iter() {
+            ret.extend(v.get_closure_escaped_vars());
+        }
+        ret
+    }
 }
 
-impl GetUsedVars for Expr {
+impl GetEscapeInfo for Expr {
     fn get_used_vars(&self) -> Vec<String> {
         match *self {
             Expr::Nil | Expr::Dots | Expr::Boolean(_) | Expr::Number(_) | Expr::String(_) => Vec::new(),
@@ -190,9 +275,44 @@ impl GetUsedVars for Expr {
             Expr::Index(ref l, ref r) => pair_get_used_vars!(l, r),
         }
     }
+
+    fn get_closure_escaped_vars(&self) -> Vec<String> {
+        match *self {
+            Expr::Nil | Expr::Dots | Expr::Boolean(_) | Expr::Number(_) | Expr::String(_) => Vec::new(),
+            Expr::Function(ref l, ref r) => {
+                let mut args: HashSet<String> = l.iter()
+                    .map(|v| v.id().unwrap().to_string())
+                    .collect();
+                let mut result: Vec<String> = r.get_used_vars()
+                    .into_iter()
+                    .filter(|v| !args.contains(v)).collect();
+                result
+            },
+            Expr::Table(ref t) => t.get_closure_escaped_vars(),
+            Expr::Add(ref l, ref r) => pair_get_closure_escaped_vars!(l, r),
+            Expr::Sub(ref l, ref r) => pair_get_closure_escaped_vars!(l, r),
+            Expr::Mul(ref l, ref r) => pair_get_closure_escaped_vars!(l, r),
+            Expr::Div(ref l, ref r) => pair_get_closure_escaped_vars!(l, r),
+            Expr::Idiv(ref l, ref r) => pair_get_closure_escaped_vars!(l, r),
+            Expr::Mod(ref l, ref r) => pair_get_closure_escaped_vars!(l, r),
+            Expr::Pow(ref l, ref r) => pair_get_closure_escaped_vars!(l, r),
+            Expr::Concat(ref l, ref r) => pair_get_closure_escaped_vars!(l, r),
+            Expr::Eq(ref l, ref r) => pair_get_closure_escaped_vars!(l, r),
+            Expr::Ne(ref l, ref r) => pair_get_closure_escaped_vars!(l, r),
+            Expr::Lt(ref l, ref r) => pair_get_closure_escaped_vars!(l, r),
+            Expr::Gt(ref l, ref r) => pair_get_closure_escaped_vars!(l, r),
+            Expr::Le(ref l, ref r) => pair_get_closure_escaped_vars!(l, r),
+            Expr::Ge(ref l, ref r) => pair_get_closure_escaped_vars!(l, r),
+            Expr::Not(ref v) => v.get_closure_escaped_vars(),
+            Expr::Call(ref l, ref r) => pair_get_closure_escaped_vars!(l, r),
+            Expr::Pair(ref l, ref r) => pair_get_closure_escaped_vars!(l, r),
+            Expr::Id(ref v) => vec! [  ],
+            Expr::Index(ref l, ref r) => pair_get_closure_escaped_vars!(l, r),
+        }
+    }
 }
 
-impl GetUsedVars for Vec<Expr> {
+impl GetEscapeInfo for Vec<Expr> {
     fn get_used_vars(&self) -> Vec<String> {
         let mut ret: Vec<String> = Vec::new();
         for v in self.iter() {
@@ -200,9 +320,17 @@ impl GetUsedVars for Vec<Expr> {
         }
         ret
     }
+
+    fn get_closure_escaped_vars(&self) -> Vec<String> {
+        let mut ret: Vec<String> = Vec::new();
+        for v in self.iter() {
+            ret.extend(v.get_closure_escaped_vars());
+        }
+        ret
+    }
 }
 
-impl<L, R> GetUsedVars for Vec<(L, R)> where L: GetUsedVars, R: GetUsedVars {
+impl<L, R> GetEscapeInfo for Vec<(L, R)> where L: GetEscapeInfo, R: GetEscapeInfo {
     fn get_used_vars(&self) -> Vec<String> {
         let mut ret: Vec<String> = Vec::new();
         for &(ref l, ref r) in self.iter() {
@@ -211,12 +339,28 @@ impl<L, R> GetUsedVars for Vec<(L, R)> where L: GetUsedVars, R: GetUsedVars {
         }
         ret
     }
+
+    fn get_closure_escaped_vars(&self) -> Vec<String> {
+        let mut ret: Vec<String> = Vec::new();
+        for &(ref l, ref r) in self.iter() {
+            ret.extend(l.get_closure_escaped_vars());
+            ret.extend(r.get_closure_escaped_vars());
+        }
+        ret
+    }
 }
 
-impl<T> GetUsedVars for Option<T> where T: GetUsedVars {
+impl<T> GetEscapeInfo for Option<T> where T: GetEscapeInfo {
     fn get_used_vars(&self) -> Vec<String> {
         match *self {
             Some(ref v) => v.get_used_vars(),
+            None => Vec::new()
+        }
+    }
+
+    fn get_closure_escaped_vars(&self) -> Vec<String> {
+        match *self {
+            Some(ref v) => v.get_closure_escaped_vars(),
             None => Vec::new()
         }
     }
