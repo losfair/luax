@@ -241,6 +241,9 @@ impl UnrestrictedGenerateCode for Stmt {
                     return Err("Multiple return values is not supported for now".into());
                 }
             },
+            Stmt::Break => {
+                fb.write_break()?;
+            },
             _ => return Err("Not implemented".into())
         }
 

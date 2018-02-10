@@ -138,6 +138,8 @@ class Node:
                     elseBranch
                 ]
             }
+        elif self.tag == "Break":
+            return "Break"
 
         v = list(map(lambda x: x.toDict(), self.children))
 
