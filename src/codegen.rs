@@ -158,7 +158,7 @@ impl<'a> FunctionBuilder<'a> {
         self.current_basic_block += 1;
     }
 
-    pub fn build_args_load(&mut self, names: Vec<String>) -> Result<(), CodegenError> {
+    fn build_args_load(&mut self, names: Vec<String>) -> Result<(), CodegenError> {
         for i in 0..names.len() {
             let loc = self.create_local(names[i].as_str());
             self.get_current_bb().opcodes.push(
@@ -317,11 +317,14 @@ impl<'a> FunctionBuilder<'a> {
         }
     }
 
-    pub fn build(mut self, blk: &ast::Block) -> Result<usize, CodegenError> {
+    pub fn build(mut self, blk: &ast::Block, arg_names: Vec<String>) -> Result<usize, CodegenError> {
         self.closure_escaped_vars = blk.get_closure_escaped_vars().into_iter().collect();
         println!("Locals escaped to closures: {:?}", self.closure_escaped_vars);
 
         println!("{:?}", blk);
+
+        self.build_args_load(arg_names)?;
+
         blk.unrestricted_generate_code(&mut self)?;
         self.get_current_bb().opcodes.push(OpCode::LoadNull);
         self.get_current_bb().opcodes.push(OpCode::Return);

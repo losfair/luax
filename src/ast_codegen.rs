@@ -132,6 +132,89 @@ impl UnrestrictedGenerateCode for Stmt {
                     Ok(())
                 })?;
             },
+            Stmt::Repeat(ref blk, ref expr) => {
+                fb.scoped(|fb| -> Result<(), CodegenError> {
+                    let before_bb_id = fb.current_basic_block;
+
+                    let continue_point_bb_id = fb.current_basic_block + 1;
+                    fb.move_forward();
+
+                    let break_point_bb_id = fb.current_basic_block + 1;
+                    fb.move_forward();
+
+                    let body_begin_bb_id = fb.current_basic_block + 1;
+                    fb.move_forward();
+
+                    fb.basic_blocks[before_bb_id].opcodes.push(OpCode::Branch(body_begin_bb_id));
+
+                    fb.with_lci(LoopControlInfo {
+                        break_point: break_point_bb_id,
+                        continue_point: continue_point_bb_id
+                    }, |fb| blk.unrestricted_generate_code(fb))?;
+
+                    let body_end_bb_id = fb.current_basic_block;
+
+                    let expr_check_bb_id = fb.current_basic_block + 1;
+                    fb.move_forward();
+
+                    expr.restricted_generate_code(fb)?;
+
+                    let end_bb_id = fb.current_basic_block + 1;
+                    fb.move_forward();
+
+                    fb.basic_blocks[continue_point_bb_id].opcodes.push(OpCode::Branch(expr_check_bb_id));
+                    fb.basic_blocks[break_point_bb_id].opcodes.push(OpCode::Branch(end_bb_id));
+                    fb.basic_blocks[body_end_bb_id].opcodes.push(OpCode::Branch(expr_check_bb_id));
+                    fb.basic_blocks[expr_check_bb_id].opcodes.push(OpCode::ConditionalBranch(
+                        end_bb_id,
+                        body_begin_bb_id
+                    ));
+                    Ok(())
+                })?;
+            },
+            Stmt::If(ref branches, ref else_branch) => {
+                let before_bb_id = fb.current_basic_block;
+
+                fb.move_forward();
+                let terminator_bb_id = fb.current_basic_block;
+
+                let mut branch_begin_bbs: Vec<usize> = Vec::new();
+                for &(ref expr, _) in branches {
+                    fb.move_forward();
+                    expr.restricted_generate_code(fb)?;
+                    branch_begin_bbs.push(fb.current_basic_block);
+                }
+
+                if let Some(ref else_blk) = *else_branch {
+                    fb.move_forward();
+                    let else_begin = fb.current_basic_block;
+                    else_blk.unrestricted_generate_code(fb)?;
+                    fb.get_current_bb().opcodes.push(OpCode::Branch(terminator_bb_id));
+                    branch_begin_bbs.push(else_begin);
+                } else {
+                    branch_begin_bbs.push(terminator_bb_id);
+                }
+
+                assert!(branch_begin_bbs.len() == branches.len() + 1);
+                fb.basic_blocks[before_bb_id].opcodes.push(OpCode::Branch(branch_begin_bbs[0]));
+
+                for i in 0..branches.len() {
+                    let &(_, ref blk) = &branches[i];
+                    fb.move_forward();
+                    let current_bb = fb.current_basic_block;
+                    let checker_bb = branch_begin_bbs[i];
+                    fb.basic_blocks[checker_bb].opcodes.push(OpCode::ConditionalBranch(
+                        current_bb,
+                        branch_begin_bbs[i + 1]
+                    ));
+                    blk.unrestricted_generate_code(fb)?;
+                    fb.get_current_bb().opcodes.push(OpCode::Branch(terminator_bb_id));
+                }
+
+                fb.move_forward();
+                let end_bb_id = fb.current_basic_block;
+                fb.basic_blocks[terminator_bb_id].opcodes.push(OpCode::Branch(end_bb_id));
+            },
             Stmt::Local(ref lhs, ref exprs) => {
                 if lhs.len() != exprs.len() {
                     return Err("Local: lhs & exprs length mismatch".into());
@@ -184,8 +267,7 @@ impl RestrictedGenerateCode for Expr {
                     }
                 }
 
-                new_builder.build_args_load(arg_names)?;
-                let fn_id = new_builder.build(blk)?;
+                let fn_id = new_builder.build(blk, arg_names)?;
 
                 fb.write_function_load(fn_id)?;
             },
@@ -286,6 +368,11 @@ impl RestrictedGenerateCode for Expr {
                 v.restricted_generate_code(fb)?;
                 fb.get_current_bb().opcodes.push(OpCode::Not);
             },
+            Expr::Unm(ref v) => {
+                v.restricted_generate_code(fb)?;
+                fb.get_current_bb().opcodes.push(OpCode::LoadFloat(0.0));
+                fb.get_current_bb().opcodes.push(OpCode::Sub);
+            },
             Expr::Call(ref target, ref args) => {
                 for arg in args {
                     arg.restricted_generate_code(fb)?;
@@ -304,11 +391,8 @@ impl RestrictedGenerateCode for Expr {
                 fb.write_pair_create()?;
             },
             Expr::Id(ref k) => {
-                let v = match fb.get_module_builder().lookup_var(k.as_str()) {
-                    Some(v) => v,
-                    None => VarLocation::This(k.clone())
-                };
-                v.build_get(fb)?;
+                let loc = fb.get_var_location(k.as_str());
+                loc.build_get(fb)?;
             },
             Expr::Index(ref target, ref index) => {
                 index.restricted_generate_code(fb)?;

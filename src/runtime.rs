@@ -4,6 +4,7 @@ use hexagon_vm_core::builtin::array::Array;
 use hexagon_vm_core::object::Object;
 use hexagon_vm_core::builtin::dynamic_object::DynamicObject;
 use hexagon_vm_core::function::Function;
+use hexagon_vm_core::errors::VMError;
 use codegen::ModuleBuilder;
 
 pub struct ModuleRuntime<'a> {
@@ -36,6 +37,19 @@ fn init_global_resources(e: &mut ExecutorImpl, g: &mut DynamicObject) {
             let v = e.get_current_frame().must_get_argument(0);
             let s = ValueContext::new(&v, e.get_object_pool()).to_str().to_string();
             println!("{}", s);
+            Value::Null
+        }),
+        "assert" => native!(e, |e| {
+            let v = e.get_current_frame().must_get_argument(0);
+            let cond = ValueContext::new(&v, e.get_object_pool()).to_bool();
+            if !cond {
+                panic!(if let Some(reason) = e.get_current_frame().get_argument(1) {
+                    let reason = ValueContext::new(&reason, e.get_object_pool());;
+                    VMError::from(format!("Assertion failed: {}", reason.to_str()))
+                } else {
+                    VMError::from("Assertion failed")
+                });
+            }
             Value::Null
         }),
         "panic" => Value::Null

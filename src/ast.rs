@@ -48,6 +48,7 @@ pub enum Expr {
     Le(Box<Expr>, Box<Expr>),
     Ge(Box<Expr>, Box<Expr>),
     Not(Box<Expr>),
+    Unm(Box<Expr>),
     Call(Box<Expr>, Vec<Expr>),
     Pair(Box<Expr>, Box<Expr>),
     Id(String),
@@ -252,7 +253,15 @@ impl GetEscapeInfo for Expr {
     fn get_used_vars(&self) -> Vec<String> {
         match *self {
             Expr::Nil | Expr::Dots | Expr::Boolean(_) | Expr::Number(_) | Expr::String(_) => Vec::new(),
-            Expr::Function(ref l, ref r) => pair_get_used_vars!(l, r),
+            Expr::Function(ref l, ref r) => {
+                let mut args: HashSet<String> = l.iter()
+                    .map(|v| v.id().unwrap().to_string())
+                    .collect();
+                let mut result: Vec<String> = r.get_used_vars()
+                    .into_iter()
+                    .filter(|v| !args.contains(v)).collect();
+                result
+            },
             Expr::Table(ref t) => t.get_used_vars(),
             Expr::Add(ref l, ref r) => pair_get_used_vars!(l, r),
             Expr::Sub(ref l, ref r) => pair_get_used_vars!(l, r),
@@ -269,6 +278,7 @@ impl GetEscapeInfo for Expr {
             Expr::Le(ref l, ref r) => pair_get_used_vars!(l, r),
             Expr::Ge(ref l, ref r) => pair_get_used_vars!(l, r),
             Expr::Not(ref v) => v.get_used_vars(),
+            Expr::Unm(ref v) => v.get_used_vars(),
             Expr::Call(ref l, ref r) => pair_get_used_vars!(l, r),
             Expr::Pair(ref l, ref r) => pair_get_used_vars!(l, r),
             Expr::Id(ref v) => vec! [ v.clone() ],
@@ -279,15 +289,7 @@ impl GetEscapeInfo for Expr {
     fn get_closure_escaped_vars(&self) -> Vec<String> {
         match *self {
             Expr::Nil | Expr::Dots | Expr::Boolean(_) | Expr::Number(_) | Expr::String(_) => Vec::new(),
-            Expr::Function(ref l, ref r) => {
-                let mut args: HashSet<String> = l.iter()
-                    .map(|v| v.id().unwrap().to_string())
-                    .collect();
-                let mut result: Vec<String> = r.get_used_vars()
-                    .into_iter()
-                    .filter(|v| !args.contains(v)).collect();
-                result
-            },
+            Expr::Function(_, _) => self.get_used_vars(),
             Expr::Table(ref t) => t.get_closure_escaped_vars(),
             Expr::Add(ref l, ref r) => pair_get_closure_escaped_vars!(l, r),
             Expr::Sub(ref l, ref r) => pair_get_closure_escaped_vars!(l, r),
@@ -304,6 +306,7 @@ impl GetEscapeInfo for Expr {
             Expr::Le(ref l, ref r) => pair_get_closure_escaped_vars!(l, r),
             Expr::Ge(ref l, ref r) => pair_get_closure_escaped_vars!(l, r),
             Expr::Not(ref v) => v.get_closure_escaped_vars(),
+            Expr::Unm(ref v) => v.get_closure_escaped_vars(),
             Expr::Call(ref l, ref r) => pair_get_closure_escaped_vars!(l, r),
             Expr::Pair(ref l, ref r) => pair_get_closure_escaped_vars!(l, r),
             Expr::Id(ref v) => vec! [  ],

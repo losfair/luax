@@ -12,7 +12,7 @@ fn gen_and_run(ast: ast::Block) {
     let result = catch_unwind(AssertUnwindSafe(|| {
         let module = codegen::ModuleBuilder::new();
         let fn_builder = codegen::FunctionBuilder::new(&module);
-        let fn_id = fn_builder.build(&ast).unwrap();
+        let fn_id = fn_builder.build(&ast, Vec::new()).unwrap();
 
         let mut executor = ExecutorImpl::new();
         runtime::invoke(&mut executor, module, fn_id);
