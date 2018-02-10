@@ -1,6 +1,6 @@
 use std::error::Error;
 use std::fmt;
-use hexagon_vm_core::opcode::{OpCode, SelectType};
+use hexagon::opcode::{OpCode, SelectType};
 use ast::{Block, Expr, Stmt, Lhs, GetEscapeInfo};
 use codegen::{ModuleBuilder, FunctionBuilder, BasicBlockBuilder, LoopControlInfo, VarLocation};
 

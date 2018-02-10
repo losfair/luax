@@ -5,8 +5,8 @@ use ast_codegen;
 use runtime;
 use serde_json;
 use test_programs;
-use hexagon_vm_core::executor::{Executor, ExecutorImpl};
-use hexagon_vm_core::errors::VMError;
+use hexagon::executor::{Executor, ExecutorImpl};
+use hexagon::errors::VMError;
 
 fn gen_and_run(ast: ast::Block) {
     let result = catch_unwind(AssertUnwindSafe(|| {

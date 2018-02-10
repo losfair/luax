@@ -1,10 +1,10 @@
-use hexagon_vm_core::executor::ExecutorImpl;
-use hexagon_vm_core::value::{Value, ValueContext};
-use hexagon_vm_core::builtin::array::Array;
-use hexagon_vm_core::object::Object;
-use hexagon_vm_core::builtin::dynamic_object::DynamicObject;
-use hexagon_vm_core::function::Function;
-use hexagon_vm_core::errors::VMError;
+use hexagon::executor::ExecutorImpl;
+use hexagon::value::{Value, ValueContext};
+use hexagon::builtin::array::Array;
+use hexagon::object::Object;
+use hexagon::builtin::dynamic_object::DynamicObject;
+use hexagon::function::Function;
+use hexagon::errors::VMError;
 use codegen::ModuleBuilder;
 use lua_types::Table;
 

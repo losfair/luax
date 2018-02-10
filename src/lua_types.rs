@@ -1,10 +1,10 @@
 use std::any::Any;
 use std::collections::HashMap;
 use std::cell::{Cell, RefCell};
-use hexagon_vm_core::object::Object;
-use hexagon_vm_core::value::{Value, ValueContext};
-use hexagon_vm_core::executor::ExecutorImpl;
-use hexagon_vm_core::errors::{VMError, FieldNotFoundError};
+use hexagon::object::Object;
+use hexagon::value::{Value, ValueContext};
+use hexagon::executor::ExecutorImpl;
+use hexagon::errors::{VMError, FieldNotFoundError};
 
 pub struct Pair {
     left: Value,
