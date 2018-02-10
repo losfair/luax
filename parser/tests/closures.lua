@@ -5,4 +5,4 @@ function generate(a)
 end
 
 local f = generate(5)
-print(f(3))
+assert(f(3) == 8)
