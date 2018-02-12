@@ -1,6 +1,7 @@
 use hexagon::executor::ExecutorImpl;
 use hexagon::value::{Value, ValueContext};
 use hexagon::builtin::array::Array;
+use hexagon::builtin::typed_array::TypedArray;
 use hexagon::object::Object;
 use hexagon::builtin::dynamic_object::DynamicObject;
 use hexagon::function::Function;
@@ -57,6 +58,28 @@ fn init_global_resources(e: &mut ExecutorImpl, g: &mut DynamicObject) {
                 });
             }
             Value::Null
+        }),
+        "typedarray" => native!(e, |e| {
+            let array_type = e.get_current_frame().must_get_argument(0);
+            let len = ValueContext::new(
+                &e.get_current_frame().must_get_argument(1),
+                e.get_object_pool()
+            ).to_i64() as usize;
+
+            let array: Box<Object> = match ValueContext::new(&array_type, e.get_object_pool()).to_str().as_ref() {
+                "i8" => Box::new(TypedArray::new(0i8, len)),
+                "u8" => Box::new(TypedArray::new(0u8, len)),
+                "i16" => Box::new(TypedArray::new(0i16, len)),
+                "u16" => Box::new(TypedArray::new(0u16, len)),
+                "i32" => Box::new(TypedArray::new(0i32, len)),
+                "u32" => Box::new(TypedArray::new(0u32, len)),
+                "i64" => Box::new(TypedArray::new(0i64, len)),
+                "u64" => Box::new(TypedArray::new(0u64, len)),
+                "f32" => Box::new(TypedArray::new(0f32, len)),
+                "f64" => Box::new(TypedArray::new(0f64, len)),
+                _ => panic!(VMError::from("Unsupported array type"))
+            };
+            Value::Object(e.get_object_pool_mut().allocate(array))
         }),
         "@__luax_internal.new_table" => native!(e, |e| {
             alloc_object!(e, Table::new())
