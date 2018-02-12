@@ -275,14 +275,24 @@ impl RestrictedGenerateCode for Expr {
                 fb.write_function_load(fn_id)?;
             },
             Expr::Table(ref elems) => {
-                fb.write_table_create()?;
+                fb.write_array_create()?;
                 for (i, v) in elems.iter().enumerate() {
                     fb.get_current_bb().opcodes.push(OpCode::Dup);
                     v.restricted_generate_code(fb)?;
-                    fb.get_current_bb().opcodes.push(OpCode::LoadFloat((i + 1) as f64));
-                    fb.get_current_bb().opcodes.push(OpCode::Rotate3);
-                    fb.write_table_set()?;
+                    fb.get_current_bb().opcodes.push(OpCode::Rotate2);
+                    fb.write_array_push()?;
                 }
+                fb.write_table_create()?;
+                fb.get_current_bb().opcodes.extend(vec! [
+                    OpCode::Dup,
+                    OpCode::Rotate3,
+                    OpCode::Rotate2,
+                    OpCode::LoadString("__copy_from_array__".into()),
+                    OpCode::LoadNull,
+                    OpCode::Rotate3,
+                    OpCode::CallField(1),
+                    OpCode::Pop
+                ]);
             },
             Expr::Add(ref left, ref right) => {
                 left.restricted_generate_code(fb)?;

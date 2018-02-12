@@ -5,8 +5,9 @@ use hexagon::object::Object;
 use hexagon::builtin::dynamic_object::DynamicObject;
 use hexagon::function::Function;
 use hexagon::errors::VMError;
+use hexagon;
 use codegen::ModuleBuilder;
-use lua_types::Table;
+use lua_types::{Pair, Table};
 
 pub struct ModuleRuntime<'a> {
     executor: &'a mut ExecutorImpl
@@ -59,6 +60,18 @@ fn init_global_resources(e: &mut ExecutorImpl, g: &mut DynamicObject) {
         }),
         "@__luax_internal.new_table" => native!(e, |e| {
             alloc_object!(e, Table::new())
+        }),
+        "@__luax_internal.new_array" => native!(e, |e| {
+            alloc_object!(e, Array::new())
+        }),
+        "@__luax_internal.new_pair" => native!(e, |e| {
+            let left = e.get_current_frame().must_get_argument(0);
+            let right = e.get_current_frame().must_get_argument(1);
+
+            alloc_object!(e, Pair {
+                left: left,
+                right: right
+            })
         }),
         "panic" => Value::Null
     );

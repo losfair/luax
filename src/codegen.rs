@@ -218,6 +218,28 @@ impl<'a> FunctionBuilder<'a> {
         Ok(())
     }
 
+    pub fn write_array_create(&mut self) -> Result<(), CodegenError> {
+        self.get_current_bb().opcodes.extend(vec! [
+            OpCode::LoadNull,
+            OpCode::LoadString("@__luax_internal.new_array".into()),
+            OpCode::LoadThis,
+            OpCode::GetField,
+            OpCode::Call(0)
+        ]);
+        Ok(())
+    }
+
+    pub fn write_array_push(&mut self) -> Result<(), CodegenError> {
+        self.get_current_bb().opcodes.extend(vec! [
+            OpCode::LoadString("push".into()),
+            OpCode::LoadNull,
+            OpCode::Rotate3,
+            OpCode::CallField(1),
+            OpCode::Pop
+        ]);
+        Ok(())
+    }
+
     pub fn write_table_create(&mut self) -> Result<(), CodegenError> {
         self.get_current_bb().opcodes.extend(vec! [
             OpCode::LoadNull,
@@ -248,7 +270,14 @@ impl<'a> FunctionBuilder<'a> {
     }
 
     pub fn write_pair_create(&mut self) -> Result<(), CodegenError> {
-        Err("Not implemented".into())
+        self.get_current_bb().opcodes.extend(vec! [
+            OpCode::LoadNull,
+            OpCode::LoadString("@__luax_internal.new_pair".into()),
+            OpCode::LoadThis,
+            OpCode::GetField,
+            OpCode::Call(2)
+        ]);
+        Ok(())
     }
 
     pub fn write_index_get(&mut self) -> Result<(), CodegenError> {

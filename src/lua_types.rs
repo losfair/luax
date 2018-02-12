@@ -5,10 +5,11 @@ use hexagon::object::Object;
 use hexagon::value::{Value, ValueContext};
 use hexagon::executor::ExecutorImpl;
 use hexagon::errors::{VMError, FieldNotFoundError};
+use hexagon::builtin::array::Array;
 
 pub struct Pair {
-    left: Value,
-    right: Value
+    pub left: Value,
+    pub right: Value
 }
 
 impl Object for Pair {
@@ -68,6 +69,14 @@ impl Table {
             string_values: RefCell::new(HashMap::new()),
             number_values: RefCell::new(HashMap::new())
         }
+    }
+
+    pub fn clear(&self) {
+        let mut string_values = self.string_values.borrow_mut();
+        let mut number_values = self.number_values.borrow_mut();
+
+        string_values.clear();
+        number_values.clear();
     }
 
     pub fn len(&self) -> usize {
@@ -145,6 +154,36 @@ impl Object for Table {
             },
             "__len__" => {
                 Value::Int(self.len() as i64)
+            },
+            "__copy_from_array__" => {
+                let pool = executor.get_object_pool();
+
+                let array = executor.get_current_frame().must_get_argument(0).as_object_id();
+                let array = pool.must_get_direct_typed::<Array>(array);
+
+                self.clear();
+
+                let mut deferred_items: Vec<Value> = Vec::new();
+                let mut deferred_pairs: Vec<(Value, Value)> = Vec::new();
+
+                for elem in array.elements.borrow().iter() {
+                    if let Value::Object(id) = *elem {
+                        if let Some(pair) = pool.get_direct_typed::<Pair>(id) {
+                            deferred_pairs.push((pair.left, pair.right));
+                            continue;
+                        }
+                    }
+                    deferred_items.push(*elem);
+                }
+
+                for (k, v) in deferred_pairs {
+                    self.set(executor, k, v);
+                }
+                for (i, v) in deferred_items.into_iter().enumerate() {
+                    self.set(executor, Value::Float((i + 1) as f64), v);
+                }
+
+                Value::Null
             },
             _ => panic!(VMError::from(FieldNotFoundError::from_field_name(name)))
         }
