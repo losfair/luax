@@ -1,6 +1,6 @@
 local t = {1, 2}
-t["0"] = 3
+t["1"] = 3
 
-assert(t["0"] == 3)
-assert(t[0] == 1)
-assert(t[1] == 2)
+assert(t["1"] == 3)
+assert(t[1] == 1)
+assert(t[2] == 2)
