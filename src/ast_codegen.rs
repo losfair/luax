@@ -87,9 +87,12 @@ impl UnrestrictedGenerateCode for Stmt {
     fn unrestricted_generate_code(&self, fb: &mut FunctionBuilder) -> Result<(), CodegenError> {
         match *self {
             Stmt::Do(ref stmts) => {
-                for stmt in stmts {
-                    stmt.unrestricted_generate_code(fb)?;
-                }
+                fb.scoped(|fb| -> Result<(), CodegenError> {
+                    for stmt in stmts {
+                        stmt.unrestricted_generate_code(fb)?;
+                    }
+                    Ok(())
+                })?;
             },
             Stmt::Set(ref lhs, ref exprs) => {
                 if lhs.len() != exprs.len() {
