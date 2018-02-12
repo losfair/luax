@@ -1,8 +1,7 @@
 function fib(n)
-    while n == 0 do
+    if n == 0 then
         return 0
-    end
-    while n == 1 do
+    elseif n == 1 then
         return 1
     end
     return fib(n - 1) + fib(n - 2)
